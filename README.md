@@ -9,8 +9,9 @@ Upload a promotional banner, drag a square target to where the QR code should go
 1. **Upload Banner** (PNG, JPG, JPEG or WEBP).
 2. Drag the square to position it. Use the corner handles to resize (it stays square and inside the banner). Arrow keys nudge it; hold Shift for bigger steps.
 3. Enter the website URL.
-4. Click **GENERATE QR CODE**. It fills the square exactly, and follows it if you move or resize afterwards.
-5. Click **DOWNLOAD FINAL BANNER** to get `wackybuds-buenas-banner.png` at the banner's original width and height. The square outline and handles are never included.
+4. Click **GENERATE QR CODE**. It fills the square exactly, and follows it if you move or resize afterwards. The Buenas logo is placed in the center of every QR by default.
+5. (Optional) **Customize QR**, which updates live: turn the center logo on/off and change its size (15–30%), pick the QR color and background color, and choose the module style (Square, Rounded, Dots). The three corner eyes always stay square so every style scans well.
+6. Click **DOWNLOAD FINAL BANNER** to get `wackybuds-buenas-banner.png` at the banner's original width and height. The square outline and handles are never included.
 
 ## Run locally
 
@@ -48,7 +49,9 @@ The workflow sets `VITE_BASE=/<repo-name>/` automatically from your repository n
 
 ## Notes
 
-- The QR code uses error correction level Q, black on white, with the standard 4-module quiet zone included inside the square.
+- Default look is black on white with the standard 4-module quiet zone included inside the square. Error correction is level H when the logo is on (it covers part of the code) and level Q when it's off.
+- To change the logo, replace `src/assets/buenas-logo.jpg` with your own square image.
+- The app warns about low-contrast or light-on-dark color choices, since many phone scanners can't read those.
 - Positions are stored in original banner pixels, so the preview and the exported PNG use identical coordinates.
 - For reliable scanning, keep the QR at least ~3 pixels per module; the app warns you if it's too small.
 - Very large banners may exceed your browser's canvas limit; the app shows a message if export fails.

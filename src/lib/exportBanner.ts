@@ -1,5 +1,5 @@
 import type { Square } from './geometry'
-import { drawQr, type QrMatrix } from './qr'
+import { drawQr, type QrMatrix, type QrStyle } from './qr'
 
 export const DOWNLOAD_NAME = 'wackybuds-buenas-banner.png'
 
@@ -13,6 +13,8 @@ export function renderFinalBanner(
   height: number,
   square: Square,
   qr: QrMatrix,
+  qrStyle: QrStyle,
+  logoImg: HTMLImageElement | null,
 ): Promise<Blob> {
   const canvas = document.createElement('canvas')
   canvas.width = width
@@ -26,7 +28,7 @@ export function renderFinalBanner(
   const size = Math.max(1, Math.min(Math.round(square.size), width, height))
   const x = Math.min(Math.max(Math.round(square.x), 0), width - size)
   const y = Math.min(Math.max(Math.round(square.y), 0), height - size)
-  drawQr(ctx, qr, x, y, size)
+  drawQr(ctx, qr, x, y, size, qrStyle, logoImg)
 
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {

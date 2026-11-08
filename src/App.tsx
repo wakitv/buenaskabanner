@@ -3,8 +3,21 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { AlertCircle, CheckCircle2, Download, ImagePlus, QrCode } from 'lucide-react'
 import BannerEditor from './components/BannerEditor'
 import { initialSquare, type Square } from './lib/geometry'
-import { createQrMatrix, normalizeUrl, totalModules, type QrMatrix } from './lib/qr'
+import {
+  DEFAULT_STYLE,
+  LOGO_SCALE_MAX,
+  LOGO_SCALE_MIN,
+  contrastRatio,
+  createQrMatrix,
+  isInverted,
+  normalizeUrl,
+  totalModules,
+  type QrMatrix,
+  type QrShape,
+  type QrStyle,
+} from './lib/qr'
 import { DOWNLOAD_NAME, renderFinalBanner, saveBlob } from './lib/exportBanner'
+import logoUrl from './assets/buenas-logo.jpg'
 
 type Banner = {
   url: string
@@ -15,6 +28,12 @@ type Banner = {
 }
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+
+const SHAPES: { id: QrShape; label: string }[] = [
+  { id: 'square', label: 'Square' },
+  { id: 'rounded', label: 'Rounded' },
+  { id: 'dots', label: 'Dots' },
+]
 
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -29,11 +48,24 @@ export default function App() {
   const [banner, setBanner] = useState<Banner | null>(null)
   const [square, setSquare] = useState<Square>({ x: 0, y: 0, size: 100 })
   const [urlInput, setUrlInput] = useState('')
-  const [qr, setQr] = useState<QrMatrix | null>(null)
+  const [qrText, setQrText] = useState<string | null>(null)
+  const [qrStyle, setQrStyle] = useState<QrStyle>(DEFAULT_STYLE)
+  const [logoImg, setLogoImg] = useState<HTMLImageElement | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const bannerUrlRef = useRef<string | null>(null)
+
+  // Load the bundled Buenas logo once.
+  useEffect(() => {
+    let alive = true
+    loadImage(logoUrl)
+      .then((img) => alive && setLogoImg(img))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
 
   // Revoke the banner's object URL when the page unmounts.
   useEffect(() => {
@@ -44,8 +76,22 @@ export default function App() {
 
   const normalizedUrl = useMemo(() => normalizeUrl(urlInput), [urlInput])
   const urlTouched = urlInput.trim().length > 0
+
+  // The matrix depends on the logo toggle: a logo needs higher error correction.
+  const qrResult = useMemo<{ qr: QrMatrix | null; failed: boolean }>(() => {
+    if (!qrText) return { qr: null, failed: false }
+    try {
+      return { qr: createQrMatrix(qrText, qrStyle.logo), failed: false }
+    } catch {
+      return { qr: null, failed: true }
+    }
+  }, [qrText, qrStyle.logo])
+  const qr = qrResult.qr
+
   const canGenerate = !!banner && !!normalizedUrl
   const canDownload = !!banner && !!qr && !busy
+
+  const update = (patch: Partial<QrStyle>) => setQrStyle((s) => ({ ...s, ...patch }))
 
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -87,19 +133,25 @@ export default function App() {
       setError('Enter a valid website URL, for example https://example.com')
       return
     }
-    try {
-      setQr(createQrMatrix(normalizedUrl))
-      setError(null)
-    } catch {
-      setError('That URL is too long to fit in a QR code. Please use a shorter link.')
-    }
+    setQrText(normalizedUrl)
+    setError(null)
   }
 
   async function onDownload() {
     if (!banner || !qr) return
     setBusy(true)
     try {
-      const blob = await renderFinalBanner(banner.img, banner.width, banner.height, square, qr)
+      // Make sure the logo is ready even if the user is very quick.
+      const logo = qrStyle.logo ? (logoImg ?? (await loadImage(logoUrl))) : null
+      const blob = await renderFinalBanner(
+        banner.img,
+        banner.width,
+        banner.height,
+        square,
+        qr,
+        qrStyle,
+        logo,
+      )
       saveBlob(blob, DOWNLOAD_NAME)
       setError(null)
     } catch (err) {
@@ -112,6 +164,22 @@ export default function App() {
   // A QR needs ~3+ pixels per module to scan reliably.
   const pxPerModule = qr ? Math.round(square.size) / totalModules(qr) : null
   const tooSmall = pxPerModule !== null && pxPerModule < 3
+
+  const lowContrast = contrastRatio(qrStyle.fg, qrStyle.bg) < 3
+  const inverted = isInverted(qrStyle.fg, qrStyle.bg)
+  const colorWarning = inverted
+    ? 'Light QR on a dark background: many phone scanners cannot read this. Use a dark QR colour on a light background.'
+    : lowContrast
+      ? 'These colours are too close together. Increase the contrast so the QR scans reliably.'
+      : null
+
+  const shownError =
+    error ??
+    (qrResult.failed
+      ? qrStyle.logo
+        ? 'That URL is too long for a QR code with a centre logo. Use a shorter link or turn the logo off.'
+        : 'That URL is too long to fit in a QR code. Please use a shorter link.'
+      : null)
 
   return (
     <div className="min-h-screen bg-buenas-black text-white">
@@ -187,35 +255,126 @@ export default function App() {
             </div>
           </form>
 
+          {/* Customize */}
+          <fieldset className="border-t border-white/10 pt-4 lg:col-span-2">
+            <legend className="sr-only">Customize QR code</legend>
+            <p className="mb-3 text-xs font-semibold tracking-widest text-white/60">
+              3 · CUSTOMIZE QR (OPTIONAL, UPDATES LIVE)
+            </p>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-[1.4fr_auto_auto_1.2fr]">
+              {/* Logo */}
+              <div className="space-y-2">
+                <label className="flex cursor-pointer items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={qrStyle.logo}
+                    onChange={(e) => update({ logo: e.target.checked })}
+                    className="peer sr-only"
+                  />
+                  <span className="relative h-6 w-11 shrink-0 rounded-full bg-white/20 transition peer-checked:bg-buenas-orange peer-focus-visible:ring-2 peer-focus-visible:ring-buenas-yellow after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-5" />
+                  <img
+                    src={logoUrl}
+                    alt=""
+                    className="h-8 w-8 rounded-md object-cover"
+                    draggable={false}
+                  />
+                  <span className="text-sm font-medium">Buenas logo in center</span>
+                </label>
+                {qrStyle.logo && (
+                  <label className="flex items-center gap-3 text-sm text-white/70">
+                    <span className="w-20 shrink-0">
+                      Size {Math.round(qrStyle.logoScale * 100)}%
+                    </span>
+                    <input
+                      type="range"
+                      min={LOGO_SCALE_MIN * 100}
+                      max={LOGO_SCALE_MAX * 100}
+                      step={1}
+                      value={Math.round(qrStyle.logoScale * 100)}
+                      onChange={(e) => update({ logoScale: Number(e.target.value) / 100 })}
+                      className="w-full accent-buenas-orange"
+                    />
+                  </label>
+                )}
+              </div>
+
+              {/* Colours */}
+              <label className="flex items-center gap-3 text-sm">
+                <input
+                  type="color"
+                  value={qrStyle.fg}
+                  onChange={(e) => update({ fg: e.target.value })}
+                  className="h-10 w-12 cursor-pointer rounded-lg border border-white/20 bg-transparent p-0.5"
+                />
+                QR color
+              </label>
+              <label className="flex items-center gap-3 text-sm">
+                <input
+                  type="color"
+                  value={qrStyle.bg}
+                  onChange={(e) => update({ bg: e.target.value })}
+                  className="h-10 w-12 cursor-pointer rounded-lg border border-white/20 bg-transparent p-0.5"
+                />
+                Background
+              </label>
+
+              {/* Shape */}
+              <div role="radiogroup" aria-label="QR style" className="flex gap-1.5">
+                {SHAPES.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={qrStyle.shape === s.id}
+                    onClick={() => update({ shape: s.id })}
+                    className={`h-10 flex-1 rounded-lg px-3 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-buenas-yellow ${
+                      qrStyle.shape === s.id
+                        ? 'bg-buenas-yellow text-buenas-black'
+                        : 'bg-white/10 text-white/80 hover:bg-white/20'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </fieldset>
+
           {/* Messages */}
           <div className="space-y-1.5 text-sm lg:col-span-2">
-            {error && (
+            {shownError && (
               <p role="alert" className="flex items-start gap-2 text-buenas-orange">
                 <AlertCircle size={18} className="mt-0.5 shrink-0" />
-                {error}
+                {shownError}
               </p>
             )}
-            {!error && !banner && (
+            {!shownError && colorWarning && (
+              <p className="flex items-start gap-2 text-buenas-yellow">
+                <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                {colorWarning}
+              </p>
+            )}
+            {!shownError && !banner && (
               <p className="text-white/55">Upload a banner (PNG, JPG or WEBP) to get started.</p>
             )}
-            {!error && banner && urlTouched && !normalizedUrl && (
+            {!shownError && banner && urlTouched && !normalizedUrl && (
               <p className="flex items-start gap-2 text-buenas-yellow">
                 <AlertCircle size={18} className="mt-0.5 shrink-0" />
                 Enter a valid website URL, for example https://example.com
               </p>
             )}
-            {!error && banner && !urlTouched && !qr && (
+            {!shownError && banner && !urlTouched && !qr && (
               <p className="text-white/55">
                 Drag the square (and its corner handles) to where the QR code should go, then enter your URL.
               </p>
             )}
-            {!error && qr && !tooSmall && (
+            {!shownError && qr && !tooSmall && !colorWarning && (
               <p className="flex items-start gap-2 text-emerald-400">
                 <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
                 QR code placed. Move or resize the square any time; the QR follows it.
               </p>
             )}
-            {!error && tooSmall && (
+            {!shownError && tooSmall && (
               <p className="flex items-start gap-2 text-buenas-yellow">
                 <AlertCircle size={18} className="mt-0.5 shrink-0" />
                 The QR code is very small and may be hard to scan. Make the square bigger.
@@ -236,6 +395,8 @@ export default function App() {
                   square={square}
                   onSquareChange={setSquare}
                   qr={qr}
+                  qrStyle={qrStyle}
+                  logoImg={logoImg}
                 />
               </div>
               <p className="text-center text-xs text-white/50">

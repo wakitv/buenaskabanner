@@ -7,7 +7,7 @@ import {
   type Point,
   type Square,
 } from '../lib/geometry'
-import { drawQr, previewCanvasSize, type QrMatrix } from '../lib/qr'
+import { drawQr, previewCanvasSize, type QrMatrix, type QrStyle } from '../lib/qr'
 
 type Props = {
   src: string
@@ -16,6 +16,8 @@ type Props = {
   square: Square
   onSquareChange: (sq: Square) => void
   qr: QrMatrix | null
+  qrStyle: QrStyle
+  logoImg: HTMLImageElement | null
 }
 
 type Drag = {
@@ -31,13 +33,22 @@ const CORNERS: { id: Corner; cls: string }[] = [
   { id: 'se', cls: '-right-2.5 -bottom-2.5 cursor-nwse-resize' },
 ]
 
-export default function BannerEditor({ src, width, height, square, onSquareChange, qr }: Props) {
+export default function BannerEditor({
+  src,
+  width,
+  height,
+  square,
+  onSquareChange,
+  qr,
+  qrStyle,
+  logoImg,
+}: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drag = useRef<Drag | null>(null)
 
-  // Draw the QR once per code. The canvas is scaled by CSS, so it follows the
-  // square for free when it is moved or resized.
+  // Redraw only when the code or its style changes. The canvas is scaled by
+  // CSS, so it follows the square for free when it is moved or resized.
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas || !qr) return
@@ -45,8 +56,8 @@ export default function BannerEditor({ src, width, height, square, onSquareChang
     canvas.width = dim
     canvas.height = dim
     const ctx = canvas.getContext('2d')
-    if (ctx) drawQr(ctx, qr, 0, 0, dim)
-  }, [qr])
+    if (ctx) drawQr(ctx, qr, 0, 0, dim, qrStyle, logoImg)
+  }, [qr, qrStyle, logoImg])
 
   /** Pointer position in ORIGINAL banner pixels. */
   const toBanner = (e: { clientX: number; clientY: number }): Point => {
