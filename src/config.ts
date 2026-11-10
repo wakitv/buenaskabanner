@@ -5,7 +5,7 @@
  * https://wackybuds.goatcounter.com. Leave it empty to turn counting off.
  * (Setup steps are in the README and in the Admin tab.)
  */
-const SITE_CODE = ''
+const SITE_CODE = 'markcarillo'
 
 export const GOATCOUNTER_CODE: string = (
   (import.meta.env.VITE_GOATCOUNTER_CODE as string | undefined) || SITE_CODE
