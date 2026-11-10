@@ -47,6 +47,10 @@ The token is kept only in your own browser (and only if "Remember on this device
 5. (Optional) **Customize QR**, which updates live: turn the center logo on/off and change its size (15–30%), pick the QR color and background color, and choose the module style (Square, Rounded, Dots). The three corner eyes always stay square so every style scans well.
 6. Click **DOWNLOAD FINAL BANNER** to get `wackybuds-buenas-banner.png` at the banner's original width and height. The square outline and handles are never included.
 
+## Opening links from Messenger, Facebook, Telegram, etc.
+
+Apps like Messenger and Facebook open links in their own built-in browser, where downloads and "copy" can fail. When the site detects one of these, it shows a banner with an **Open in Chrome** button (plus **Copy link** as a backup). A website cannot force Chrome to open by itself, so the person has to tap the button. It needs Chrome to be installed, and on Android it falls back to the normal page if Chrome can't be launched. The banner never shows in Chrome, Safari or desktop browsers.
+
 ## Run locally
 
 ```bash

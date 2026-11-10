@@ -3,6 +3,7 @@ import { Images, QrCode, Settings2 } from 'lucide-react'
 import QrPage, { type IncomingBanner } from './QrPage'
 import LibraryPage from './components/LibraryPage'
 import AdminPage from './components/AdminPage'
+import OpenInChrome from './components/OpenInChrome'
 import { extOf, libraryImageUrl, slugify, type LibraryItem } from './lib/library'
 
 type Route = 'library' | 'qr' | 'admin'
@@ -40,6 +41,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-buenas-black text-white">
       <div className="h-1.5 w-full bg-gradient-to-r from-buenas-red via-buenas-orange to-buenas-yellow" />
+      <OpenInChrome />
 
       <header className="mx-auto flex max-w-6xl flex-wrap items-end justify-between gap-x-6 gap-y-3 px-4 pb-2 pt-6 sm:px-6">
         <p className="font-display text-3xl leading-none tracking-wide sm:text-4xl">
