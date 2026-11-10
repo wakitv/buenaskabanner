@@ -60,6 +60,50 @@ export function normalizeLibrary(data: unknown): LibraryItem[] {
     }))
 }
 
+const byNewest = (a: LibraryItem, b: LibraryItem) => b.createdAt.localeCompare(a.createdAt)
+
+/**
+ * If library.json was committed with unresolved Git merge-conflict markers
+ * (<<<<<<< / ======= / >>>>>>>), keep the banners from BOTH sides instead of
+ * losing them. Returns null when the file is damaged in some other way.
+ */
+function recoverConflict(text: string): LibraryItem[] | null {
+  const t = text.replace(/\r\n/g, '\n')
+  const block = /^<{7}[^\n]*\n([\s\S]*?)^={7}\n([\s\S]*?)^>{7}[^\n]*\n?/gm
+  const sides: string[] = []
+  const rest = t.replace(block, (_m, a: string, b: string) => {
+    sides.push(a, b)
+    return ''
+  })
+  if (sides.length === 0 || rest.trim() !== '') return null
+
+  const merged = new Map<string, LibraryItem>()
+  for (const side of sides) {
+    if (side.trim() === '') continue
+    try {
+      for (const item of normalizeLibrary(JSON.parse(side))) merged.set(item.id, item)
+    } catch {
+      return null
+    }
+  }
+  return [...merged.values()].sort(byNewest)
+}
+
+/**
+ * Parse library.json text. `recovered` is true when it contained merge-conflict
+ * markers and was repaired in memory (the next Admin save writes a clean file).
+ */
+export function parseLibraryText(raw: string): { items: LibraryItem[]; recovered: boolean } {
+  const text = raw.replace(/^﻿/, '')
+  try {
+    return { items: normalizeLibrary(JSON.parse(text)).sort(byNewest), recovered: false }
+  } catch (err) {
+    const items = recoverConflict(text)
+    if (items) return { items, recovered: true }
+    throw err
+  }
+}
+
 /** Load the published library. A missing file simply means an empty library. */
 export async function fetchLibrary(): Promise<LibraryItem[]> {
   const url = new URL('library/library.json', document.baseURI)
@@ -67,8 +111,10 @@ export async function fetchLibrary(): Promise<LibraryItem[]> {
   const res = await fetch(url.href, { cache: 'no-store' })
   if (res.status === 404) return []
   if (!res.ok) throw new Error(`library ${res.status}`)
-  const items = normalizeLibrary(await res.json())
-  return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const text = await res.text()
+  // Some dev servers answer a missing file with the app's HTML page.
+  if (/^\s*<(!doctype|html)/i.test(text)) return []
+  return parseLibraryText(text).items
 }
 
 export async function copyText(text: string): Promise<boolean> {

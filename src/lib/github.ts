@@ -1,4 +1,4 @@
-import { REPO_LIBRARY_JSON, normalizeLibrary, type LibraryItem } from './library'
+import { REPO_LIBRARY_JSON, parseLibraryText, type LibraryItem } from './library'
 
 export type RepoConfig = {
   owner: string
@@ -57,8 +57,14 @@ export async function verifyRepo(cfg: RepoConfig): Promise<void> {
   }
 }
 
-/** Read library.json straight from the repo (never stale, unlike the live site). */
-export async function readLibrary(cfg: RepoConfig): Promise<LibraryItem[]> {
+/**
+ * Read library.json straight from the repo (never stale, unlike the live site).
+ * `recovered` is true when the file had Git merge-conflict markers; the banners
+ * from both sides are kept and the next save writes a clean file.
+ */
+export async function readLibrary(
+  cfg: RepoConfig,
+): Promise<{ items: LibraryItem[]; recovered: boolean }> {
   try {
     const file = await gh<{ content: string }>(
       cfg,
@@ -66,10 +72,15 @@ export async function readLibrary(cfg: RepoConfig): Promise<LibraryItem[]> {
     )
     const bin = atob(file.content.replace(/\n/g, ''))
     const text = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)))
-    return normalizeLibrary(JSON.parse(text))
+    if (text.trim() === '') return { items: [], recovered: false }
+    return parseLibraryText(text)
   } catch (e) {
-    if (e instanceof NotFoundError) return []
-    if (e instanceof SyntaxError) throw new Error('library.json in the repo is not valid JSON.')
+    if (e instanceof NotFoundError) return { items: [], recovered: false }
+    if (e instanceof SyntaxError) {
+      throw new Error(
+        'public/library/library.json in the repo is damaged and could not be repaired automatically. Open it on GitHub and replace its contents with [] (or fix the JSON), then connect again.',
+      )
+    }
     throw e
   }
 }

@@ -31,6 +31,12 @@ The **Admin** tab commits to these files for you (one commit per change, which r
 
 The token is kept only in your own browser (and only if "Remember on this device" is ticked). Press **Disconnect & forget token** on shared computers. Anyone without the token can browse the Library but cannot change anything.
 
+### Updating the code without losing your banners
+
+Your banners live in `public/library/` **in your GitHub repo**. The code zip does not contain that folder on purpose, so uploading a new version of the code never overwrites your banners. Don't delete or replace `public/library/` when updating.
+
+If you use git on your computer, always run `git pull` before `git push`, because the Admin tab commits to the repo too. If git ever reports a conflict in `public/library/library.json`, don't commit the `<<<<<<<` lines. The site and the Admin tab can recover a file with those markers (the Admin tab shows a **Repair library.json now** button), but the cleanest fix is to keep the version that has your banners.
+
 ### Good to know
 
 - **Public repo = public banners.** Anyone with the link can see the images and captions. GitHub Pages for *private* repositories needs a paid GitHub plan. If banners must stay private, use a backend such as Supabase or Firebase instead.
@@ -58,7 +64,7 @@ GitHub Pages has no built-in visitor stats, so the site uses **GoatCounter**: fr
 1. Sign up at https://www.goatcounter.com and choose a site code (for example `wackybuds`).
 2. In GoatCounter open **Settings** and tick **"Allow adding visitor counts on your website"**, then save.
 3. Open `src/config.ts`, put your code in `SITE_CODE` (for example `const SITE_CODE = 'wackybuds'`), commit and push.
-4. After the redeploy, the **Admin** tab shows total views, Library views and QR Banner views. Click **Full stats** there for the full GoatCounter dashboard (countries, devices, referrers, daily charts).
+4. After the redeploy, the **Admin** tab shows (after you press Connect) total views, Library views and QR Banner views. Click **Full stats** there for the full GoatCounter dashboard (countries, devices, referrers, daily charts).
 
 Notes: it counts page views of the Library and QR Banner tabs; the Admin tab is never counted. Tick **"Don't count my own visits on this device"** in the Admin tab so your own checking does not inflate the numbers. Ad blockers can block the counter, so real numbers are usually a bit higher. The public counter can lag by a few hours. Leave `SITE_CODE` empty to turn counting off completely.
 

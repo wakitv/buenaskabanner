@@ -93,6 +93,7 @@ export default function AdminPage() {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [conflict, setConflict] = useState(false)
 
   // Upload form
   const fileRef = useRef<HTMLInputElement>(null)
@@ -171,7 +172,9 @@ export default function AdminPage() {
     e.preventDefault()
     void run('connect', async () => {
       await verifyRepo(cfg)
-      setItems(await readLibrary(cfg))
+      const lib = await readLibrary(cfg)
+      setItems(lib.items)
+      setConflict(lib.recovered)
       persist()
       setConnected(true)
     })
@@ -185,14 +188,21 @@ export default function AdminPage() {
     message: string,
     change: (fresh: LibraryItem[]) => { next: LibraryItem[]; extra?: FileChange[] },
   ) {
-    const fresh = await readLibrary(cfg)
+    const fresh = (await readLibrary(cfg)).items
     const { next, extra = [] } = change(fresh)
     await commitFiles(cfg, message, [
       ...extra,
       { path: REPO_LIBRARY_JSON, text: JSON.stringify(next, null, 2) + '\n' },
     ])
     setItems(next)
+    setConflict(false) // the file we just wrote is clean
   }
+
+  const onRepair = () =>
+    void run('repair', async () => {
+      await mutate('Repair library.json (resolve merge conflict)', (fresh) => ({ next: fresh }))
+      setNotice('Repaired. library.json is clean again; the site updates after the redeploy (1–2 minutes).')
+    })
 
   function onPickFile(f: File | undefined) {
     if (!f) return
@@ -276,8 +286,6 @@ export default function AdminPage() {
       <h1 className="font-display text-2xl tracking-widest text-white/90 sm:text-3xl">
         Admin: Manage Banners
       </h1>
-
-      <VisitorStats />
 
       {/* Connection */}
       <section className="rounded-2xl border border-white/10 bg-buenas-panel p-4 sm:p-5">
@@ -380,8 +388,29 @@ export default function AdminPage() {
         </div>
       )}
 
+      {connected && conflict && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-buenas-yellow/40 bg-buenas-yellow/10 p-4 text-sm">
+          <p className="min-w-[16rem] flex-1 text-white/85">
+            <b>library.json has a Git merge conflict</b> (lines like <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</code>).
+            Your banners were recovered. Press Repair to save a clean file, or just publish or edit
+            anything and it is fixed automatically.
+          </p>
+          <button
+            type="button"
+            onClick={onRepair}
+            disabled={!!busy}
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-buenas-yellow px-4 font-bold text-buenas-black disabled:opacity-50"
+          >
+            {busy === 'repair' && <Loader2 size={16} className="animate-spin" />}
+            Repair library.json now
+          </button>
+        </div>
+      )}
+
       {connected && (
         <>
+          <VisitorStats />
+
           {/* Upload */}
           <section className="rounded-2xl border border-white/10 bg-buenas-panel p-4 sm:p-5">
             <form onSubmit={onPublish} className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
