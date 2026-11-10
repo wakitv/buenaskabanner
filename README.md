@@ -1,10 +1,44 @@
-# WackyBuds x Buenas: QR Banner Generator
+# WackyBuds x Buenas: QR Banner Generator + Banner Library
 
-Upload a promotional banner, drag a square target to where the QR code should go, enter a website URL, and download the finished banner as a full-resolution PNG. Everything runs locally in your browser. No backend, no login, no API.
+Two tools in one site:
+
+- **Library**: the team browses ready-to-post banners, copies each caption with one click, and downloads the banner.
+- **QR Banner**: upload any banner, drag a square target to where the QR code should go, enter a website URL, and download the finished banner as a full-resolution PNG.
+- **Admin**: the admin uploads banners and captions straight from the browser. They are saved in this GitHub repository.
+
+No backend, no database, no paid service.
 
 **Stack:** React, Vite, TypeScript, Tailwind CSS, Lucide icons, `qrcode`, HTML5 Canvas.
 
-## How to use
+## Banner Library and where the data lives
+
+GitHub Pages is static hosting, so the banners are stored **inside your GitHub repository** and published with the site:
+
+```
+public/library/library.json        <- title, caption, tags of every banner
+public/library/images/<id>.jpg     <- the banner images
+```
+
+The **Admin** tab commits to these files for you (one commit per change, which redeploys the site in about 1-2 minutes). You can also edit them by hand on GitHub.
+
+### Using the Admin tab
+
+1. Create a **fine-grained personal access token** on GitHub: Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token. Under *Repository access* choose **Only select repositories** and pick this repo. Under *Permissions → Repository permissions* set **Contents: Read and write**.
+2. Open the site → **Admin**, check the username / repository / branch (they are guessed from the URL), paste the token and press **Connect**.
+3. Choose a banner image, write the title and caption (the team copies this), optional tags, then **Publish to Library**.
+4. Wait 1-2 minutes for the redeploy (watch the **Actions** tab), then refresh the Library.
+5. Edit captions or delete banners from the list below the form.
+
+The token is kept only in your own browser (and only if "Remember on this device" is ticked). Press **Disconnect & forget token** on shared computers. Anyone without the token can browse the Library but cannot change anything.
+
+### Good to know
+
+- **Public repo = public banners.** Anyone with the link can see the images and captions. GitHub Pages for *private* repositories needs a paid GitHub plan. If banners must stay private, use a backend such as Supabase or Firebase instead.
+- **Size limits:** GitHub recommends repositories under about 1 GB, files must be under 100 MB, and the published site under 1 GB. Large images are shrunk automatically to at most 2400 px on the longest side (JPEG, quality 90) unless you untick that option; typical banners end up around 0.3-2 MB, so hundreds of banners fit comfortably.
+- Two admins can work at the same time: the Admin tab re-reads `library.json` from the repo right before each commit so changes are not overwritten.
+- Deleting a banner removes it from the latest version of the site, but old copies stay in the repository's git history.
+
+## How to use the QR Banner tool
 
 1. **Upload Banner** (PNG, JPG, JPEG or WEBP).
 2. Drag the square to position it. Use the corner handles to resize (it stays square and inside the banner). Arrow keys nudge it; hold Shift for bigger steps.
