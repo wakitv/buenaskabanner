@@ -51,6 +51,17 @@ The token is kept only in your own browser (and only if "Remember on this device
 
 Apps like Messenger and Facebook open links in their own built-in browser, where downloads and "copy" can fail. When the site detects one of these, it shows a banner with an **Open in Chrome** button (plus **Copy link** as a backup). A website cannot force Chrome to open by itself, so the person has to tap the button. It needs Chrome to be installed, and on Android it falls back to the normal page if Chrome can't be launched. The banner never shows in Chrome, Safari or desktop browsers.
 
+## Visitor counter (shown in the Admin tab)
+
+GitHub Pages has no built-in visitor stats, so the site uses **GoatCounter**: free, no cookies, no personal data.
+
+1. Sign up at https://www.goatcounter.com and choose a site code (for example `wackybuds`).
+2. In GoatCounter open **Settings** and tick **"Allow adding visitor counts on your website"**, then save.
+3. Open `src/config.ts`, put your code in `SITE_CODE` (for example `const SITE_CODE = 'wackybuds'`), commit and push.
+4. After the redeploy, the **Admin** tab shows total views, Library views and QR Banner views. Click **Full stats** there for the full GoatCounter dashboard (countries, devices, referrers, daily charts).
+
+Notes: it counts page views of the Library and QR Banner tabs; the Admin tab is never counted. Tick **"Don't count my own visits on this device"** in the Admin tab so your own checking does not inflate the numbers. Ad blockers can block the counter, so real numbers are usually a bit higher. The public counter can lag by a few hours. Leave `SITE_CODE` empty to turn counting off completely.
+
 ## Run locally
 
 ```bash

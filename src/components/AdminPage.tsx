@@ -10,6 +10,7 @@ import {
   Trash2,
   UploadCloud,
 } from 'lucide-react'
+import VisitorStats from './VisitorStats'
 import {
   commitFiles,
   readLibrary,
@@ -275,6 +276,8 @@ export default function AdminPage() {
       <h1 className="font-display text-2xl tracking-widest text-white/90 sm:text-3xl">
         Admin: Manage Banners
       </h1>
+
+      <VisitorStats />
 
       {/* Connection */}
       <section className="rounded-2xl border border-white/10 bg-buenas-panel p-4 sm:p-5">

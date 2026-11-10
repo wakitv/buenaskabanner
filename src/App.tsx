@@ -4,6 +4,7 @@ import QrPage, { type IncomingBanner } from './QrPage'
 import LibraryPage from './components/LibraryPage'
 import AdminPage from './components/AdminPage'
 import OpenInChrome from './components/OpenInChrome'
+import { initAnalytics, trackView } from './lib/analytics'
 import { extOf, libraryImageUrl, slugify, type LibraryItem } from './lib/library'
 
 type Route = 'library' | 'qr' | 'admin'
@@ -22,6 +23,16 @@ const TABS: { id: Route; label: string; icon: typeof Images }[] = [
 export default function App() {
   const [route, setRoute] = useState<Route>(parseRoute)
   const [incoming, setIncoming] = useState<IncomingBanner | null>(null)
+
+  useEffect(() => {
+    initAnalytics()
+  }, [])
+
+  // Count a view per tab (never the Admin tab).
+  useEffect(() => {
+    if (route === 'admin') return
+    trackView(`/${route}`, route === 'qr' ? 'QR Banner' : 'Library')
+  }, [route])
 
   useEffect(() => {
     const onHash = () => setRoute(parseRoute())
