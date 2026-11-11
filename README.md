@@ -50,7 +50,7 @@ If you use git on your computer, always run `git pull` before `git push`, becaus
 2. Drag the square to position it. Use the corner handles to resize (it stays square and inside the banner). Arrow keys nudge it; hold Shift for bigger steps.
 3. Enter the website URL.
 4. Click **GENERATE QR CODE**. It fills the square exactly, and follows it if you move or resize afterwards. The Buenas logo is placed in the center of every QR by default.
-5. (Optional) **Customize QR**, which updates live: turn the center logo on/off and change its size (15–30%), pick the QR color and background color, and choose the module style (Square, Rounded, Dots). The three corner eyes always stay square so every style scans well.
+5. (Optional) **Customize QR**, which updates live: turn the center logo on/off and change its size (15–30%), pick the QR color and background color (or tick **Transparent background** so the banner shows behind the QR), and choose the module style (Square, Rounded, Dots). The three corner eyes always stay square so every style scans well.
 6. Click **DOWNLOAD FINAL BANNER** to get `wackybuds-buenas-banner.png` at the banner's original width and height. The square outline and handles are never included.
 
 ## Opening links from Messenger, Facebook, Telegram, etc.
@@ -106,7 +106,7 @@ The workflow sets `VITE_BASE=/<repo-name>/` automatically from your repository n
 
 - Default look is black on white with the standard 4-module quiet zone included inside the square. Error correction is level H when the logo is on (it covers part of the code) and level Q when it's off.
 - To change the logo, replace `src/assets/buenas-logo.jpg` with your own square image.
-- The app warns about low-contrast or light-on-dark color choices, since many phone scanners can't read those.
+- The app warns about low-contrast or light-on-dark color choices, since many phone scanners can't read those. With **Transparent background** it checks the banner area under the square instead: place the QR on a plain, light area and keep the QR dark. Busy or dark areas behind a transparent QR often fail to scan, so always test with your phone before printing.
 - Positions are stored in original banner pixels, so the preview and the exported PNG use identical coordinates.
 - For reliable scanning, keep the QR at least ~3 pixels per module; the app warns you if it's too small.
 - Very large banners may exceed your browser's canvas limit; the app shows a message if export fails.

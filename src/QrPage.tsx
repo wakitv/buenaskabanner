@@ -9,7 +9,9 @@ import {
   LOGO_SCALE_MIN,
   contrastRatio,
   createQrMatrix,
+  hexLuminance,
   isInverted,
+  sampleBackdrop,
   normalizeUrl,
   totalModules,
   type QrMatrix,
@@ -200,13 +202,39 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
   const pxPerModule = qr ? Math.round(square.size) / totalModules(qr) : null
   const tooSmall = pxPerModule !== null && pxPerModule < 3
 
-  const lowContrast = contrastRatio(qrStyle.fg, qrStyle.bg) < 3
-  const inverted = isInverted(qrStyle.fg, qrStyle.bg)
-  const colorWarning = inverted
-    ? 'Light QR on a dark background: many phone scanners cannot read this. Use a dark QR colour on a light background.'
-    : lowContrast
-      ? 'These colours are too close together. Increase the contrast so the QR scans reliably.'
-      : null
+  // With a transparent background the QR sits on the banner itself, so judge
+  // the banner area under the square instead of the background colour.
+  const backdrop = useMemo(
+    () =>
+      qrStyle.transparent && qr && banner ? sampleBackdrop(banner.img, square) : null,
+    [qrStyle.transparent, qr, banner, square],
+  )
+
+  let colorWarning: string | null = null
+  if (qrStyle.transparent) {
+    if (backdrop) {
+      const fgLum = hexLuminance(qrStyle.fg)
+      const ratio = (Math.max(fgLum, backdrop.lum) + 0.05) / (Math.min(fgLum, backdrop.lum) + 0.05)
+      if (fgLum > backdrop.lum) {
+        colorWarning =
+          'The QR is lighter than the banner behind it: many phone scanners cannot read this. Use a dark QR colour on a light area, or move the square.'
+      } else if (ratio < 3) {
+        colorWarning =
+          'The banner behind the QR is too close to the QR colour. Pick a different QR colour or move the square onto a lighter area.'
+      } else if (backdrop.spread > 0.2 || backdrop.texture > 0.12) {
+        colorWarning =
+          'The banner behind the QR is very busy, so it may not scan. Move the square to a plainer area, or turn off Transparent.'
+      }
+    }
+  } else {
+    const lowContrast = contrastRatio(qrStyle.fg, qrStyle.bg) < 3
+    const inverted = isInverted(qrStyle.fg, qrStyle.bg)
+    colorWarning = inverted
+      ? 'Light QR on a dark background: many phone scanners cannot read this. Use a dark QR colour on a light background.'
+      : lowContrast
+        ? 'These colours are too close together. Increase the contrast so the QR scans reliably.'
+        : null
+  }
 
   const shownError =
     error ??
@@ -327,15 +355,29 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
                 />
                 QR color
               </label>
-              <label className="flex items-center gap-3 text-sm">
-                <input
-                  type="color"
-                  value={qrStyle.bg}
-                  onChange={(e) => update({ bg: e.target.value })}
-                  className="h-10 w-12 cursor-pointer rounded-lg border border-white/20 bg-transparent p-0.5"
-                />
-                Background
-              </label>
+              <div className="space-y-2">
+                <label
+                  className={`flex items-center gap-3 text-sm ${qrStyle.transparent ? 'opacity-40' : ''}`}
+                >
+                  <input
+                    type="color"
+                    value={qrStyle.bg}
+                    disabled={qrStyle.transparent}
+                    onChange={(e) => update({ bg: e.target.value })}
+                    className="h-10 w-12 cursor-pointer rounded-lg border border-white/20 bg-transparent p-0.5 disabled:cursor-not-allowed"
+                  />
+                  Background
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-white/85">
+                  <input
+                    type="checkbox"
+                    checked={qrStyle.transparent}
+                    onChange={(e) => update({ transparent: e.target.checked })}
+                    className="accent-buenas-orange"
+                  />
+                  Transparent background
+                </label>
+              </div>
 
               {/* Shape */}
               <div role="radiogroup" aria-label="QR style" className="flex gap-1.5">

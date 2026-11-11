@@ -14,6 +14,8 @@ export type QrStyle = {
   fg: string
   /** Background colour (also used for the quiet zone). */
   bg: string
+  /** Leave the background see-through so the banner shows behind the QR. */
+  transparent: boolean
   shape: QrShape
   /** Show the Buenas logo in the centre. */
   logo: boolean
@@ -24,6 +26,7 @@ export type QrStyle = {
 export const DEFAULT_STYLE: QrStyle = {
   fg: '#000000',
   bg: '#ffffff',
+  transparent: false,
   shape: 'square',
   logo: true,
   logoScale: 0.22,
@@ -106,8 +109,10 @@ export function drawQr(
 
   ctx.save()
   ctx.imageSmoothingEnabled = false
-  ctx.fillStyle = style.bg
-  ctx.fillRect(x, y, size, size)
+  if (!style.transparent) {
+    ctx.fillStyle = style.bg
+    ctx.fillRect(x, y, size, size)
+  }
   ctx.fillStyle = style.fg
 
   for (let r = 0; r < n; r++) {
@@ -145,10 +150,12 @@ export function drawQr(
   }
 
   if (showLogo && logo) {
-    // Background plate keeps a clean margin around the logo.
-    ctx.fillStyle = style.bg
-    roundRectPath(ctx, x + mid - half, y + mid - half, half * 2, half * 2, half * 0.28)
-    ctx.fill()
+    // Background plate keeps a clean margin around the logo (not when transparent).
+    if (!style.transparent) {
+      ctx.fillStyle = style.bg
+      roundRectPath(ctx, x + mid - half, y + mid - half, half * 2, half * 2, half * 0.28)
+      ctx.fill()
+    }
 
     const bx = x + mid - boxSide / 2
     const by = y + mid - boxSide / 2
@@ -196,6 +203,74 @@ export function contrastRatio(a: string, b: string): number {
   const la = lum(a)
   const lb = lum(b)
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+
+const srgbToLinear = (v: number) => {
+  const c = v / 255
+  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+}
+
+/** WCAG relative luminance (0 – 1) of a #rrggbb colour. */
+export function hexLuminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => srgbToLinear(parseInt(hex.slice(i, i + 2), 16)))
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+/**
+ * What the QR would sit on when its background is transparent: the average
+ * brightness of the banner under the square, and how "busy" (uneven) it is.
+ */
+export function sampleBackdrop(
+  img: HTMLImageElement,
+  sq: { x: number; y: number; size: number },
+): { lum: number; spread: number; texture: number } | null {
+  const N = 24
+  const canvas = document.createElement('canvas')
+  canvas.width = N
+  canvas.height = N
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return null
+  ctx.fillStyle = '#ffffff' // transparent PNG areas count as white
+  ctx.fillRect(0, 0, N, N)
+  ctx.drawImage(img, sq.x, sq.y, sq.size, sq.size, 0, 0, N, N)
+  const { data } = ctx.getImageData(0, 0, N, N)
+  const lums: number[] = []
+  for (let i = 0; i < data.length; i += 4) {
+    lums.push(
+      0.2126 * srgbToLinear(data[i]) + 0.7152 * srgbToLinear(data[i + 1]) + 0.0722 * srgbToLinear(data[i + 2]),
+    )
+  }
+  const lum = lums.reduce((a, b) => a + b, 0) / lums.length
+  const spread = Math.sqrt(lums.reduce((a, b) => a + (b - lum) ** 2, 0) / lums.length)
+
+  // Fine detail (patterns, noise, photo texture) is averaged away by the
+  // smoothed sample above, so measure it separately on raw pixels: the mean
+  // brightness jump between neighbouring samples.
+  const T = 64
+  const tex = document.createElement('canvas')
+  tex.width = T
+  tex.height = T
+  const tctx = tex.getContext('2d', { willReadFrequently: true })
+  let texture = 0
+  if (tctx) {
+    tctx.fillStyle = '#ffffff'
+    tctx.fillRect(0, 0, T, T)
+    tctx.imageSmoothingEnabled = false
+    tctx.drawImage(img, sq.x, sq.y, sq.size, sq.size, 0, 0, T, T)
+    const d = tctx.getImageData(0, 0, T, T).data
+    const L = (i: number) =>
+      0.2126 * srgbToLinear(d[i]) + 0.7152 * srgbToLinear(d[i + 1]) + 0.0722 * srgbToLinear(d[i + 2])
+    let sum = 0
+    let n = 0
+    for (let row = 0; row < T; row++) {
+      for (let col = 0; col < T - 1; col++) {
+        sum += Math.abs(L((row * T + col) * 4) - L((row * T + col + 1) * 4))
+        n++
+      }
+    }
+    texture = sum / n
+  }
+  return { lum, spread, texture }
 }
 
 /** Relative luminance helper used to detect inverted (light-on-dark) codes. */
