@@ -51,7 +51,8 @@ If you use git on your computer, always run `git pull` before `git push`, becaus
 3. Enter the website URL.
 4. Click **GENERATE QR CODE**. It fills the square exactly, and follows it if you move or resize afterwards. The Buenas logo is placed in the center of every QR by default.
 5. (Optional) **Customize QR**, which updates live: turn the center logo on/off and change its size (15–30%), pick the QR color and background color (or tick **Transparent background** so the banner shows behind the QR), and choose the module style (Square, Rounded, Dots). The three corner eyes always stay square so every style scans well.
-6. Click **DOWNLOAD FINAL BANNER** to get `wackybuds-buenas-banner.png` at the banner's original width and height. The square outline and handles are never included.
+6. (Optional) **Place QR behind the banner**: unticked (default), the QR is drawn on top of the banner. Ticked, the QR goes *under* the banner and only shows through the banner's transparent parts. Use this with a PNG that has a see-through window (for example a frame with a cut-out), so the frame's design stays in front of the QR. The app warns you if the banner is not see-through where the square is, or if the window is smaller than the square.
+7. Click **DOWNLOAD FINAL BANNER** to get `wackybuds-buenas-banner.png` at the banner's original width and height. The square outline and handles are never included.
 
 ## Opening links from Messenger, Facebook, Telegram, etc.
 

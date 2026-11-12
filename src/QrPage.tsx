@@ -12,6 +12,7 @@ import {
   hexLuminance,
   isInverted,
   sampleBackdrop,
+  transparentShare,
   normalizeUrl,
   totalModules,
   type QrMatrix,
@@ -55,6 +56,7 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
   const [urlInput, setUrlInput] = useState('')
   const [qrText, setQrText] = useState<string | null>(null)
   const [qrStyle, setQrStyle] = useState<QrStyle>(DEFAULT_STYLE)
+  const [behind, setBehind] = useState(false) // false = QR in front of the banner
   const [logoImg, setLogoImg] = useState<HTMLImageElement | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -188,6 +190,7 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
         qr,
         qrStyle,
         logo,
+        behind,
       )
       saveBlob(blob, DOWNLOAD_NAME)
       setError(null)
@@ -204,11 +207,26 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
 
   // With a transparent background the QR sits on the banner itself, so judge
   // the banner area under the square instead of the background colour.
+  // (Not relevant when the QR is behind the banner: nothing sits under it then.)
   const backdrop = useMemo(
     () =>
-      qrStyle.transparent && qr && banner ? sampleBackdrop(banner.img, square) : null,
-    [qrStyle.transparent, qr, banner, square],
+      qrStyle.transparent && !behind && qr && banner ? sampleBackdrop(banner.img, square) : null,
+    [qrStyle.transparent, behind, qr, banner, square],
   )
+
+  // Behind the banner the QR only shows where the banner is see-through.
+  const clearShare = useMemo(
+    () => (behind && qr && banner ? transparentShare(banner.img, square) : null),
+    [behind, qr, banner, square],
+  )
+  const behindWarning =
+    clearShare === null
+      ? null
+      : clearShare < 0.02
+        ? 'The QR is behind the banner, but the banner is not see-through here, so the QR is hidden. Move the square over the banner\'s transparent window, or untick "Place QR behind the banner".'
+        : clearShare < 0.97
+          ? 'Part of the QR is covered by the banner. Make sure the whole square sits inside the transparent window, or the QR may not scan.'
+          : null
 
   let colorWarning: string | null = null
   if (qrStyle.transparent) {
@@ -398,6 +416,23 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
                   </button>
                 ))}
               </div>
+
+              {/* Layer order */}
+              <label className="flex cursor-pointer items-start gap-3 text-sm sm:col-span-2 lg:col-span-4">
+                <input
+                  type="checkbox"
+                  checked={behind}
+                  onChange={(e) => setBehind(e.target.checked)}
+                  className="peer sr-only"
+                />
+                <span className="relative mt-0.5 h-6 w-11 shrink-0 rounded-full bg-white/20 transition peer-checked:bg-buenas-orange peer-focus-visible:ring-2 peer-focus-visible:ring-buenas-yellow after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-5" />
+                <span>
+                  <span className="font-medium">Place QR behind the banner</span>
+                  <span className="block text-white/55">
+                    Off: QR is on top of the banner. On: QR goes under the banner and shows only through its transparent window (use a PNG with a see-through cut-out).
+                  </span>
+                </span>
+              </label>
             </div>
           </fieldset>
 
@@ -415,6 +450,12 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
                 {colorWarning}
               </p>
             )}
+            {!shownError && behindWarning && (
+              <p role="status" className="flex items-start gap-2 text-buenas-yellow">
+                <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                {behindWarning}
+              </p>
+            )}
             {!shownError && !banner && (
               <p className="text-white/55">Upload a banner (PNG, JPG or WEBP) to get started.</p>
             )}
@@ -429,7 +470,7 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
                 Drag the square (and its corner handles) to where the QR code should go, then enter your URL.
               </p>
             )}
-            {!shownError && qr && !tooSmall && !colorWarning && (
+            {!shownError && qr && !tooSmall && !colorWarning && !behindWarning && (
               <p className="flex items-start gap-2 text-emerald-400">
                 <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
                 QR code placed. Move or resize the square any time; the QR follows it.
@@ -458,6 +499,7 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
                   qr={qr}
                   qrStyle={qrStyle}
                   logoImg={logoImg}
+                  behind={behind}
                 />
               </div>
               <p className="text-center text-xs text-white/50">

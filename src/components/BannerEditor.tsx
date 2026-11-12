@@ -18,6 +18,8 @@ type Props = {
   qr: QrMatrix | null
   qrStyle: QrStyle
   logoImg: HTMLImageElement | null
+  /** Draw the QR under the banner instead of on top of it. */
+  behind: boolean
 }
 
 type Drag = {
@@ -42,6 +44,7 @@ export default function BannerEditor({
   qr,
   qrStyle,
   logoImg,
+  behind,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -109,15 +112,32 @@ export default function BannerEditor({
   return (
     <div
       ref={wrapRef}
-      className="relative inline-block max-w-full select-none leading-[0] shadow-2xl shadow-black/60"
+      className="relative isolate inline-block max-w-full select-none leading-[0] shadow-2xl shadow-black/60"
     >
       <img
         src={src}
         alt="Uploaded banner"
         draggable={false}
-        className="block h-auto max-h-[75vh] w-auto max-w-full"
-        style={{ aspectRatio: `${width} / ${height}` }}
+        className="relative block h-auto max-h-[75vh] w-auto max-w-full"
+        style={{ aspectRatio: `${width} / ${height}`, zIndex: behind ? 1 : 0 }}
       />
+
+      {/* One QR canvas, layered above or below the banner. */}
+      {qr && (
+        <canvas
+          ref={canvasRef}
+          aria-hidden
+          data-testid="qr-canvas"
+          className="pointer-events-none absolute"
+          style={{
+            left: `${(square.x / width) * 100}%`,
+            top: `${(square.y / height) * 100}%`,
+            width: `${(square.size / width) * 100}%`,
+            height: `${(square.size / height) * 100}%`,
+            zIndex: behind ? 0 : 1,
+          }}
+        />
+      )}
 
       <div
         role="application"
@@ -135,9 +155,9 @@ export default function BannerEditor({
           width: `${(square.size / width) * 100}%`,
           height: `${(square.size / height) * 100}%`,
           backgroundColor: qr ? undefined : 'rgba(255, 198, 41, 0.18)',
+          zIndex: 2,
         }}
       >
-        {qr && <canvas ref={canvasRef} className="block h-full w-full" />}
 
         {CORNERS.map((c) => (
           <span

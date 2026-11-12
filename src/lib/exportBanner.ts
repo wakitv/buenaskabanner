@@ -15,6 +15,7 @@ export function renderFinalBanner(
   qr: QrMatrix,
   qrStyle: QrStyle,
   logoImg: HTMLImageElement | null,
+  behind: boolean,
 ): Promise<Blob> {
   const canvas = document.createElement('canvas')
   canvas.width = width
@@ -22,13 +23,18 @@ export function renderFinalBanner(
   const ctx = canvas.getContext('2d')
   if (!ctx) return Promise.reject(new Error('Canvas is not supported in this browser.'))
 
-  ctx.drawImage(img, 0, 0, width, height)
-
   // Snap to whole pixels, then clamp so rounding can never push it off-canvas.
   const size = Math.max(1, Math.min(Math.round(square.size), width, height))
   const x = Math.min(Math.max(Math.round(square.x), 0), width - size)
   const y = Math.min(Math.max(Math.round(square.y), 0), height - size)
-  drawQr(ctx, qr, x, y, size, qrStyle, logoImg)
+  if (behind) {
+    // QR first, banner on top: the QR only shows through transparent parts.
+    drawQr(ctx, qr, x, y, size, qrStyle, logoImg)
+    ctx.drawImage(img, 0, 0, width, height)
+  } else {
+    ctx.drawImage(img, 0, 0, width, height)
+    drawQr(ctx, qr, x, y, size, qrStyle, logoImg)
+  }
 
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {

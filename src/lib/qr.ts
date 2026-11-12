@@ -273,6 +273,28 @@ export function sampleBackdrop(
   return { lum, spread, texture }
 }
 
+/**
+ * Share (0 – 1) of the banner under the square that is see-through. Used when
+ * the QR sits BEHIND the banner: it only shows where the banner is transparent.
+ */
+export function transparentShare(
+  img: HTMLImageElement,
+  sq: { x: number; y: number; size: number },
+): number | null {
+  const N = 48
+  const canvas = document.createElement('canvas')
+  canvas.width = N
+  canvas.height = N
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return null
+  ctx.imageSmoothingEnabled = false
+  ctx.drawImage(img, sq.x, sq.y, sq.size, sq.size, 0, 0, N, N)
+  const { data } = ctx.getImageData(0, 0, N, N)
+  let clear = 0
+  for (let i = 3; i < data.length; i += 4) if (data[i] < 230) clear++
+  return clear / (N * N)
+}
+
 /** Relative luminance helper used to detect inverted (light-on-dark) codes. */
 export function isInverted(fg: string, bg: string): boolean {
   const l = (hex: string) =>
