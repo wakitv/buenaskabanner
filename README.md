@@ -27,7 +27,7 @@ The **Admin** tab commits to these files for you (one commit per change, which r
 2. Open the site → **Admin**, check the username / repository / branch (they are guessed from the URL), paste the token and press **Connect**.
 3. Choose a banner image, write the title and caption (the team copies this), optional tags, then **Publish to Library**.
 4. Wait 1-2 minutes for the redeploy (watch the **Actions** tab), then refresh the Library.
-5. Edit captions or delete banners from the list below the form.
+5. Edit or delete banners from the list below the form. Press the pencil to edit the **title, caption and tags** (the image stays the same): the fields are labelled, tags show a live preview of how they will be saved (lower-case, no `#`, duplicates removed), **Save changes** stays disabled until you change something, **Ctrl+Enter** saves and **Esc** cancels. Errors and the "Saved" note appear right on that banner. You can have several banners open for editing at once without losing what you typed. **Reload list** re-reads the list from GitHub.
 
 The token is kept only in your own browser (and only if "Remember on this device" is ticked). Press **Disconnect & forget token** on shared computers. Anyone without the token can browse the Library but cannot change anything.
 
@@ -41,13 +41,13 @@ If you use git on your computer, always run `git pull` before `git push`, becaus
 
 - **Public repo = public banners.** Anyone with the link can see the images and captions. GitHub Pages for *private* repositories needs a paid GitHub plan. If banners must stay private, use a backend such as Supabase or Firebase instead.
 - **Size limits:** GitHub recommends repositories under about 1 GB, files must be under 100 MB, and the published site under 1 GB. Large images are shrunk automatically to at most 2400 px on the longest side (JPEG, quality 90) unless you untick that option; typical banners end up around 0.3-2 MB, so hundreds of banners fit comfortably.
-- Two admins can work at the same time: the Admin tab re-reads `library.json` from the repo right before each commit so changes are not overwritten.
+- Two admins can work at the same time. Every save reads `library.json` at the repository's latest commit and commits on top of exactly that commit. If someone else saved in between, GitHub refuses the update and the app automatically re-reads and tries again (up to 3 times), so nobody's banners or edits get overwritten.
 - Deleting a banner removes it from the latest version of the site, but old copies stay in the repository's git history.
 
 ## How to use the QR Banner tool
 
 1. **Upload Banner** (PNG, JPG, JPEG or WEBP).
-2. Drag the square to position it. Use the corner handles to resize (it stays square and inside the banner). Arrow keys nudge it; hold Shift for bigger steps.
+2. Drag the box to position it. Pull a **side handle** to stretch it in one direction, or a **corner handle** to resize both ways (hold **Shift** to keep its shape). It always stays inside the banner, and **Make box square** resets it. The QR itself always stays a perfect square, sized to the box's shorter side and centered in the box (a dashed guide shows where). Arrow keys move the box; hold Shift for bigger steps.
 3. Enter the website URL.
 4. Click **GENERATE QR CODE**. It fills the square exactly, and follows it if you move or resize afterwards. The Buenas logo is placed in the center of every QR by default.
 5. (Optional) **Customize QR**, which updates live: turn the center logo on/off and change its size (15–30%), pick the QR color and background color (or tick **Transparent background** so the banner shows behind the QR), and choose the module style (Square, Rounded, Dots). The three corner eyes always stay square so every style scans well.

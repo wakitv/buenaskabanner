@@ -6,12 +6,13 @@ import {
   ImagePlus,
   KeyRound,
   Loader2,
-  Pencil,
-  Trash2,
+  RefreshCw,
   UploadCloud,
 } from 'lucide-react'
 import VisitorStats from './VisitorStats'
+import BannerRow, { type EditPatch } from './BannerRow'
 import {
+  ConflictError,
   commitFiles,
   readLibrary,
   verifyRepo,
@@ -22,7 +23,6 @@ import {
   REPO_LIBRARY_DIR,
   REPO_LIBRARY_JSON,
   blobToBase64,
-  libraryImageUrl,
   parseTags,
   prepareImage,
   slugify,
@@ -48,30 +48,6 @@ function loadSaved(): Saved {
   } catch {
     return {}
   }
-}
-
-/** Thumbnail that explains itself while a freshly published image is still deploying. */
-function Thumb({ item }: { item: LibraryItem }) {
-  const [failed, setFailed] = useState(false)
-  const box = 'h-20 w-28 shrink-0 rounded-lg bg-black/30 sm:h-24 sm:w-36'
-  if (failed) {
-    return (
-      <div className={`${box} flex items-center justify-center text-center text-xs text-white/50`}>
-        Deploying…
-        <br />
-        (1–2 min)
-      </div>
-    )
-  }
-  return (
-    <img
-      src={libraryImageUrl(item)}
-      alt=""
-      loading="lazy"
-      onError={() => setFailed(true)}
-      className={`${box} object-cover`}
-    />
-  )
 }
 
 const inputCls =
@@ -104,11 +80,8 @@ export default function AdminPage() {
   const [tagsRaw, setTagsRaw] = useState('')
   const [optimize, setOptimize] = useState(true)
 
-  // Inline edit
-  const [editId, setEditId] = useState<string | null>(null)
-  const [editTitle, setEditTitle] = useState('')
-  const [editCaption, setEditCaption] = useState('')
-  const [editTags, setEditTags] = useState('')
+  // Banners saved a moment ago (shows a note on the row)
+  const [savedIds, setSavedIds] = useState<string[]>([])
 
   const cfg: RepoConfig = {
     owner: owner.trim(),
@@ -181,21 +154,42 @@ export default function AdminPage() {
   }
 
   /**
-   * Always re-read library.json from the repo right before committing, so a
-   * second admin's changes are never overwritten by a stale list.
+   * Safe read-modify-write. library.json is read at the branch's exact latest
+   * commit, changed, and committed on top of that same commit. If someone else
+   * commits in between, GitHub refuses and we start over with fresh data, so
+   * nothing is ever overwritten. Returns false (and commits nothing) when the
+   * change would not alter anything.
    */
   async function mutate(
     message: string,
     change: (fresh: LibraryItem[]) => { next: LibraryItem[]; extra?: FileChange[] },
-  ) {
-    const fresh = (await readLibrary(cfg)).items
-    const { next, extra = [] } = change(fresh)
-    await commitFiles(cfg, message, [
-      ...extra,
-      { path: REPO_LIBRARY_JSON, text: JSON.stringify(next, null, 2) + '\n' },
-    ])
-    setItems(next)
-    setConflict(false) // the file we just wrote is clean
+  ): Promise<boolean> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const lib = await readLibrary(cfg)
+      const { next, extra = [] } = change(lib.items)
+      if (!lib.recovered && extra.length === 0 && JSON.stringify(next) === JSON.stringify(lib.items)) {
+        setItems(lib.items)
+        return false
+      }
+      try {
+        await commitFiles(
+          cfg,
+          message,
+          [...extra, { path: REPO_LIBRARY_JSON, text: JSON.stringify(next, null, 2) + '\n' }],
+          lib.headSha,
+        )
+      } catch (e) {
+        if (e instanceof ConflictError) {
+          if (attempt < 2) continue
+          throw new Error('The repository kept changing while saving. Please try again in a moment.')
+        }
+        throw e
+      }
+      setItems(next)
+      setConflict(false) // the file we just wrote is clean
+      return true
+    }
+    return false
   }
 
   const onRepair = () =>
@@ -248,27 +242,37 @@ export default function AdminPage() {
     })
   }
 
-  function startEdit(item: LibraryItem) {
-    setEditId(item.id)
-    setEditTitle(item.title)
-    setEditCaption(item.caption)
-    setEditTags(item.tags.join(', '))
+  /** Called by a row's edit form. Errors are thrown so the row can show them next to the form. */
+  async function saveEdit(item: LibraryItem, patch: EditPatch): Promise<'saved' | 'nochange'> {
+    setBusy('edit')
+    setError(null)
+    setNotice(null)
+    try {
+      const changed = await mutate(`Edit banner: ${patch.title}`, (fresh) => {
+        if (!fresh.some((i) => i.id === item.id)) {
+          throw new Error(
+            'This banner no longer exists in the repository (it may have been deleted). Press "Reload list".',
+          )
+        }
+        return { next: fresh.map((i) => (i.id === item.id ? { ...i, ...patch } : i)) }
+      })
+      if (changed) {
+        setSavedIds((ids) => [...ids, item.id])
+        window.setTimeout(() => setSavedIds((ids) => ids.filter((x) => x !== item.id)), 8000)
+      }
+      return changed ? 'saved' : 'nochange'
+    } finally {
+      setBusy(null)
+    }
   }
 
-  const onSaveEdit = (item: LibraryItem) => {
-    if (!editTitle.trim()) return setError('The title cannot be empty.')
-    void run('edit', async () => {
-      await mutate(`Edit banner: ${editTitle.trim()}`, (fresh) => ({
-        next: fresh.map((i) =>
-          i.id === item.id
-            ? { ...i, title: editTitle.trim(), caption: editCaption.trim(), tags: parseTags(editTags) }
-            : i,
-        ),
-      }))
-      setEditId(null)
-      setNotice('Saved. The Library updates after the site redeploys, usually within 1–2 minutes.')
+  const onReload = () =>
+    void run('reload', async () => {
+      const lib = await readLibrary(cfg)
+      setItems(lib.items)
+      setConflict(lib.recovered)
+      setNotice('List refreshed from GitHub.')
     })
-  }
 
   const onDelete = (item: LibraryItem) => {
     if (!window.confirm(`Delete "${item.title}"? This removes the banner and its caption.`)) return
@@ -485,67 +489,29 @@ export default function AdminPage() {
 
           {/* Existing */}
           <section className="space-y-3">
-            <p className={labelCls}>PUBLISHED BANNERS ({items.length})</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className={labelCls}>PUBLISHED BANNERS ({items.length})</p>
+              <button
+                type="button"
+                onClick={onReload}
+                disabled={!!busy}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/20 disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={busy === 'reload' ? 'animate-spin' : ''} />
+                Reload list
+              </button>
+            </div>
             {items.length === 0 && <p className="text-sm text-white/50">Nothing published yet.</p>}
             <ul className="space-y-3">
               {items.map((item) => (
-                <li key={item.id} className="rounded-2xl border border-white/10 bg-buenas-panel p-3 sm:p-4">
-                  {editId === item.id ? (
-                    <div className="space-y-3">
-                      <input className={inputCls} value={editTitle} onChange={(e) => setEditTitle(e.target.value)} aria-label="Title" />
-                      <textarea
-                        value={editCaption}
-                        onChange={(e) => setEditCaption(e.target.value)}
-                        rows={5}
-                        aria-label="Caption"
-                        className="w-full rounded-xl border border-white/15 bg-buenas-ink p-3 text-base text-white focus:border-buenas-orange focus:outline-none focus:ring-2 focus:ring-buenas-orange/40"
-                      />
-                      <input className={inputCls} value={editTags} onChange={(e) => setEditTags(e.target.value)} aria-label="Tags" />
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onSaveEdit(item)}
-                          disabled={!!busy}
-                          className="rounded-lg bg-buenas-yellow px-4 py-2 text-sm font-bold text-buenas-black disabled:opacity-50"
-                        >
-                          {busy === 'edit' ? 'Saving…' : 'Save'}
-                        </button>
-                        <button type="button" onClick={() => setEditId(null)} className="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold">
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex gap-3 sm:gap-4">
-                      <Thumb item={item} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold">{item.title}</p>
-                        <p className="line-clamp-2 whitespace-pre-wrap break-words text-sm text-white/60">
-                          {item.caption || 'No caption'}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-                        <button
-                          type="button"
-                          onClick={() => startEdit(item)}
-                          aria-label={`Edit ${item.title}`}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20"
-                        >
-                          <Pencil size={18} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(item)}
-                          disabled={!!busy}
-                          aria-label={`Delete ${item.title}`}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-buenas-red/20 text-buenas-red hover:bg-buenas-red/30 disabled:opacity-50"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </li>
+                <BannerRow
+                  key={item.id}
+                  item={item}
+                  busy={!!busy}
+                  justSaved={savedIds.includes(item.id)}
+                  onSave={saveEdit}
+                  onDelete={onDelete}
+                />
               ))}
             </ul>
           </section>

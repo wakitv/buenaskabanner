@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { AlertCircle, CheckCircle2, Download, ImagePlus, QrCode } from 'lucide-react'
 import BannerEditor from './components/BannerEditor'
-import { initialSquare, type Square } from './lib/geometry'
+import { initialRect, makeSquare, qrBox, type Rect } from './lib/geometry'
 import {
   DEFAULT_STYLE,
   LOGO_SCALE_MAX,
@@ -52,7 +52,7 @@ export type IncomingBanner = { url: string; name: string; nonce: number }
 
 export default function QrPage({ incoming }: { incoming: IncomingBanner | null }) {
   const [banner, setBanner] = useState<Banner | null>(null)
-  const [square, setSquare] = useState<Square>({ x: 0, y: 0, size: 100 })
+  const [square, setSquare] = useState<Rect>({ x: 0, y: 0, w: 100, h: 100 })
   const [urlInput, setUrlInput] = useState('')
   const [qrText, setQrText] = useState<string | null>(null)
   const [qrStyle, setQrStyle] = useState<QrStyle>(DEFAULT_STYLE)
@@ -111,6 +111,9 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incoming])
 
+  // The QR is the largest square that fits in the (possibly stretched) box.
+  const qrArea = useMemo(() => qrBox(square), [square])
+
   const normalizedUrl = useMemo(() => normalizeUrl(urlInput), [urlInput])
   const urlTouched = urlInput.trim().length > 0
 
@@ -154,7 +157,7 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
       bannerUrlRef.current = url
 
       setBanner({ url, img, width, height, name: file.name })
-      setSquare(initialSquare(width, height))
+      setSquare(initialRect(width, height))
       setError(null)
     } catch {
       URL.revokeObjectURL(url)
@@ -202,7 +205,7 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
   }
 
   // A QR needs ~3+ pixels per module to scan reliably.
-  const pxPerModule = qr ? Math.round(square.size) / totalModules(qr) : null
+  const pxPerModule = qr ? Math.round(qrArea.size) / totalModules(qr) : null
   const tooSmall = pxPerModule !== null && pxPerModule < 3
 
   // With a transparent background the QR sits on the banner itself, so judge
@@ -210,14 +213,14 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
   // (Not relevant when the QR is behind the banner: nothing sits under it then.)
   const backdrop = useMemo(
     () =>
-      qrStyle.transparent && !behind && qr && banner ? sampleBackdrop(banner.img, square) : null,
-    [qrStyle.transparent, behind, qr, banner, square],
+      qrStyle.transparent && !behind && qr && banner ? sampleBackdrop(banner.img, qrArea) : null,
+    [qrStyle.transparent, behind, qr, banner, qrArea],
   )
 
   // Behind the banner the QR only shows where the banner is see-through.
   const clearShare = useMemo(
-    () => (behind && qr && banner ? transparentShare(banner.img, square) : null),
-    [behind, qr, banner, square],
+    () => (behind && qr && banner ? transparentShare(banner.img, qrArea) : null),
+    [behind, qr, banner, qrArea],
   )
   const behindWarning =
     clearShare === null
@@ -467,7 +470,7 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
             )}
             {!shownError && banner && !urlTouched && !qr && (
               <p className="text-white/55">
-                Drag the square (and its corner handles) to where the QR code should go, then enter your URL.
+                Drag the box (and its corner or side handles) to where the QR code should go, then enter your URL.
               </p>
             )}
             {!shownError && qr && !tooSmall && !colorWarning && !behindWarning && (
@@ -494,18 +497,33 @@ export default function QrPage({ incoming }: { incoming: IncomingBanner | null }
                   src={banner.url}
                   width={banner.width}
                   height={banner.height}
-                  square={square}
-                  onSquareChange={setSquare}
+                  box={square}
+                  onBoxChange={setSquare}
                   qr={qr}
                   qrStyle={qrStyle}
                   logoImg={logoImg}
                   behind={behind}
                 />
               </div>
-              <p className="text-center text-xs text-white/50">
-                {banner.name} · {banner.width} × {banner.height}px · square at{' '}
-                {Math.round(square.x)}, {Math.round(square.y)} · {Math.round(square.size)}px
-                (arrow keys nudge the selected square)
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-white/50">
+                <p className="text-center">
+                  {banner.name} · {banner.width} × {banner.height}px · box{' '}
+                  {Math.round(square.w)} × {Math.round(square.h)}px at {Math.round(square.x)},{' '}
+                  {Math.round(square.y)} · QR {Math.round(qrArea.size)}px
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSquare((r) => makeSquare(r))}
+                  disabled={Math.abs(square.w - square.h) < 1}
+                  className="rounded-lg bg-white/10 px-3 py-1.5 font-semibold text-white/80 transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-buenas-yellow disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Make box square
+                </button>
+              </div>
+              <p className="text-center text-xs text-white/40">
+                Drag the box to move it. Pull a side handle to stretch one direction, or a corner
+                handle to resize both (hold Shift to keep the shape). The QR always stays square and
+                centered in the box.
               </p>
             </div>
           ) : (

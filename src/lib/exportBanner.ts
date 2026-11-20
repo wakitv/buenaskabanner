@@ -1,4 +1,4 @@
-import type { Square } from './geometry'
+import { qrBox, type Rect } from './geometry'
 import { drawQr, type QrMatrix, type QrStyle } from './qr'
 
 export const DOWNLOAD_NAME = 'wackybuds-buenas-banner.png'
@@ -11,7 +11,7 @@ export function renderFinalBanner(
   img: HTMLImageElement,
   width: number,
   height: number,
-  square: Square,
+  box: Rect,
   qr: QrMatrix,
   qrStyle: QrStyle,
   logoImg: HTMLImageElement | null,
@@ -24,9 +24,11 @@ export function renderFinalBanner(
   if (!ctx) return Promise.reject(new Error('Canvas is not supported in this browser.'))
 
   // Snap to whole pixels, then clamp so rounding can never push it off-canvas.
-  const size = Math.max(1, Math.min(Math.round(square.size), width, height))
-  const x = Math.min(Math.max(Math.round(square.x), 0), width - size)
-  const y = Math.min(Math.max(Math.round(square.y), 0), height - size)
+  // The QR is the largest square inside the box, centred (same as the preview).
+  const q = qrBox(box)
+  const size = Math.max(1, Math.min(Math.round(q.size), width, height))
+  const x = Math.min(Math.max(Math.round(q.x), 0), width - size)
+  const y = Math.min(Math.max(Math.round(q.y), 0), height - size)
   if (behind) {
     // QR first, banner on top: the QR only shows through transparent parts.
     drawQr(ctx, qr, x, y, size, qrStyle, logoImg)

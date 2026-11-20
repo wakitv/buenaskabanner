@@ -16,6 +16,17 @@ const API = 'https://api.github.com'
 
 class NotFoundError extends Error {}
 
+class HttpError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
+
+/** The branch moved while we were saving: re-read and try again. */
+export class ConflictError extends Error {}
+
 async function gh<T>(cfg: RepoConfig, path: string, init: RequestInit = {}): Promise<T> {
   let res: Response
   try {
@@ -36,11 +47,13 @@ async function gh<T>(cfg: RepoConfig, path: string, init: RequestInit = {}): Pro
   }
   if (res.status === 403) {
     throw new Error(
-      'The token is not allowed to do that. It needs "Contents: Read and write" on this repository.',
+      'The token is not allowed to do that (or GitHub is rate limiting). It needs "Contents: Read and write" on this repository.',
     )
   }
   if (res.status === 404) throw new NotFoundError('not found')
-  if (!res.ok) throw new Error(`GitHub returned an error (${res.status}). Please try again.`)
+  if (!res.ok) {
+    throw new HttpError(`GitHub returned an error (${res.status}). Please try again.`, res.status)
+  }
   return (await res.json()) as T
 }
 
@@ -57,25 +70,39 @@ export async function verifyRepo(cfg: RepoConfig): Promise<void> {
   }
 }
 
+export type LibraryRead = {
+  items: LibraryItem[]
+  /** True when the file had Git merge-conflict markers and was repaired in memory. */
+  recovered: boolean
+  /** The exact commit the data was read from. Commit on top of this one. */
+  headSha: string
+}
+
 /**
- * Read library.json straight from the repo (never stale, unlike the live site).
- * `recovered` is true when the file had Git merge-conflict markers; the banners
- * from both sides are kept and the next save writes a clean file.
+ * Read library.json from the repo at the branch's CURRENT commit. Reading by
+ * commit id (not by branch name) means we never get a cached, older copy, so
+ * an edit made right after a publish can't drop the new banner.
  */
-export async function readLibrary(
-  cfg: RepoConfig,
-): Promise<{ items: LibraryItem[]; recovered: boolean }> {
+export async function readLibrary(cfg: RepoConfig): Promise<LibraryRead> {
+  const branch = encodeURIComponent(cfg.branch)
+  let headSha: string
   try {
-    const file = await gh<{ content: string }>(
-      cfg,
-      `/contents/${REPO_LIBRARY_JSON}?ref=${encodeURIComponent(cfg.branch)}`,
-    )
+    headSha = (await gh<{ object: { sha: string } }>(cfg, `/git/ref/heads/${branch}`)).object.sha
+  } catch (e) {
+    if (e instanceof NotFoundError) {
+      throw new Error('Repository or branch not found. Check the owner, repository name and branch.')
+    }
+    throw e
+  }
+
+  try {
+    const file = await gh<{ content: string }>(cfg, `/contents/${REPO_LIBRARY_JSON}?ref=${headSha}`)
     const bin = atob(file.content.replace(/\n/g, ''))
     const text = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)))
-    if (text.trim() === '') return { items: [], recovered: false }
-    return parseLibraryText(text)
+    if (text.trim() === '') return { items: [], recovered: false, headSha }
+    return { ...parseLibraryText(text), headSha }
   } catch (e) {
-    if (e instanceof NotFoundError) return { items: [], recovered: false }
+    if (e instanceof NotFoundError) return { items: [], recovered: false, headSha }
     if (e instanceof SyntaxError) {
       throw new Error(
         'public/library/library.json in the repo is damaged and could not be repaired automatically. Open it on GitHub and replace its contents with [] (or fix the JSON), then connect again.',
@@ -88,15 +115,23 @@ export async function readLibrary(
 /**
  * Commit several file changes as ONE commit (so the site only redeploys once).
  * Uses the Git Data API: blobs -> tree -> commit -> move the branch.
+ *
+ * Pass `baseSha` (the commit the data was read from). If the branch has moved
+ * since, GitHub refuses the update and a ConflictError is thrown, so nobody's
+ * changes are overwritten.
  */
 export async function commitFiles(
   cfg: RepoConfig,
   message: string,
   changes: FileChange[],
+  baseSha?: string,
 ): Promise<void> {
   const branch = encodeURIComponent(cfg.branch)
-  const ref = await gh<{ object: { sha: string } }>(cfg, `/git/ref/heads/${branch}`)
-  const headSha = ref.object.sha
+  let headSha = baseSha
+  if (!headSha) {
+    const ref = await gh<{ object: { sha: string } }>(cfg, `/git/ref/heads/${branch}`)
+    headSha = ref.object.sha
+  }
   const head = await gh<{ tree: { sha: string } }>(cfg, `/git/commits/${headSha}`)
 
   const entries: { path: string; mode: string; type: string; sha: string | null }[] = []
@@ -124,8 +159,16 @@ export async function commitFiles(
     method: 'POST',
     body: JSON.stringify({ message, tree: tree.sha, parents: [headSha] }),
   })
-  await gh(cfg, `/git/refs/heads/${branch}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ sha: commit.sha }),
-  })
+  try {
+    // Not a forced update: fails if the branch moved, instead of overwriting.
+    await gh(cfg, `/git/refs/heads/${branch}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ sha: commit.sha }),
+    })
+  } catch (e) {
+    if (e instanceof HttpError && (e.status === 422 || e.status === 409)) {
+      throw new ConflictError('branch moved')
+    }
+    throw e
+  }
 }
