@@ -43,7 +43,7 @@ function BannerCard({
   }
 
   return (
-    <article className="mb-4 break-inside-avoid overflow-hidden rounded-2xl border border-white/10 bg-buenas-panel">
+    <article className="overflow-hidden rounded-2xl border border-white/10 bg-buenas-panel">
       <img
         src={src}
         alt={item.title}
@@ -266,7 +266,8 @@ export default function LibraryPage({ onUseInQr }: { onUseInQr: (item: LibraryIt
       ) : filtered.length === 0 ? (
         <p className="py-16 text-center text-white/50">No banners match your search.</p>
       ) : (
-        <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
+        <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Dealt left to right, row by row: the first card (top-left) is always the first in the chosen order. */}
           {filtered.map((item) => (
             <BannerCard key={item.id} item={item} onUseInQr={onUseInQr} />
           ))}
