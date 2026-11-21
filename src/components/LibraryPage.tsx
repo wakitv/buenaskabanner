@@ -124,11 +124,18 @@ function BannerCard({
   )
 }
 
+type Order = 'latest' | 'oldest'
+const ORDERS: { id: Order; label: string }[] = [
+  { id: 'latest', label: 'Latest' },
+  { id: 'oldest', label: 'Oldest' },
+]
+
 export default function LibraryPage({ onUseInQr }: { onUseInQr: (item: LibraryItem) => void }) {
   const [items, setItems] = useState<LibraryItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [tag, setTag] = useState<string | null>(null)
+  const [order, setOrder] = useState<Order>('latest') // newest posts first by default
 
   const load = useCallback(async () => {
     setError(null)
@@ -151,12 +158,15 @@ export default function LibraryPage({ onUseInQr }: { onUseInQr: (item: LibraryIt
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return (items ?? []).filter(
+    const matches = (items ?? []).filter(
       (i) =>
         (!tag || i.tags.includes(tag)) &&
         (!q || `${i.title} ${i.caption} ${i.tags.join(' ')}`.toLowerCase().includes(q)),
     )
-  }, [items, query, tag])
+    // Sort by the date each banner was published (stable: equal dates keep their order).
+    const time = (i: LibraryItem) => Date.parse(i.createdAt) || 0
+    return matches.sort((a, b) => (order === 'latest' ? time(b) - time(a) : time(a) - time(b)))
+  }, [items, query, tag, order])
 
   return (
     <main className="mx-auto max-w-6xl space-y-5 px-4 pb-14 pt-4 sm:px-6">
@@ -164,8 +174,29 @@ export default function LibraryPage({ onUseInQr }: { onUseInQr: (item: LibraryIt
         <h1 className="font-display text-2xl tracking-widest text-white/90 sm:text-3xl sm:mr-auto">
           Banner Library
         </h1>
-        <div className="flex gap-2">
-          <label className="relative flex-1 sm:w-72">
+        <div className="flex flex-wrap gap-2">
+          <div
+            role="group"
+            aria-label="Sort banners"
+            className="flex h-11 shrink-0 rounded-xl bg-white/10 p-1"
+          >
+            {ORDERS.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                aria-pressed={order === o.id}
+                onClick={() => setOrder(o.id)}
+                className={`rounded-lg px-4 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-buenas-yellow ${
+                  order === o.id
+                    ? 'bg-buenas-yellow text-buenas-black'
+                    : 'text-white/75 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <label className="relative min-w-[11rem] flex-1 sm:w-64 sm:flex-none">
             <span className="sr-only">Search banners</span>
             <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
             <input

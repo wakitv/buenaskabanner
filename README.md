@@ -2,7 +2,7 @@
 
 Two tools in one site:
 
-- **Library**: the team browses ready-to-post banners, copies each caption with one click, and downloads the banner.
+- **Library**: the team browses ready-to-post banners (**Latest** first by default, or switch to **Oldest**), copies each caption with one click, and downloads the banner.
 - **QR Banner**: upload any banner, drag a square target to where the QR code should go, enter a website URL, and download the finished banner as a full-resolution PNG.
 - **Admin**: the admin uploads banners and captions straight from the browser. They are saved in this GitHub repository.
 
